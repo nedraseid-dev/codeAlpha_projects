@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import type { CartItem, Product } from "../types";
 import api from "../api";
+import { useAuth } from "./AuthContext";
 
 interface CartContextValue {
   items: CartItem[];
@@ -15,31 +16,44 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
 
-const STORAGE_KEY = "cart";
+function storageKeyFor(userId: string | null) {
+  return userId ? `cart_${userId}` : "cart_guest";
+}
 
-function loadCart(): CartItem[] {
+function loadCart(key: string): CartItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as CartItem[]) : [];
   } catch {
     return [];
   }
 }
 
-function saveCart(items: CartItem[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+function saveCart(key: string, items: CartItem[]) {
+  localStorage.setItem(key, JSON.stringify(items));
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [items, setItems] = useState<CartItem[]>(loadCart);
+  const { user } = useAuth();
+  const storageKey = storageKeyFor(user?.id ?? null);
+  const [items, setItems] = useState<CartItem[]>(() => loadCart(storageKey));
 
-  const set = useCallback((updater: (prev: CartItem[]) => CartItem[]) => {
-    setItems((prev) => {
-      const next = updater(prev);
-      saveCart(next);
-      return next;
-    });
-  }, []);
+  // Whenever the logged-in user changes (login, logout, switching accounts),
+  // swap to that user's own cart instead of whatever was left behind before.
+  useEffect(() => {
+    setItems(loadCart(storageKey));
+  }, [storageKey]);
+
+  const set = useCallback(
+    (updater: (prev: CartItem[]) => CartItem[]) => {
+      setItems((prev) => {
+        const next = updater(prev);
+        saveCart(storageKey, next);
+        return next;
+      });
+    },
+    [storageKey]
+  );
 
   const addItem = useCallback(
     (product: Product, quantity = 1) => {
@@ -53,7 +67,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return [...prev, { product, quantity }];
       });
 
-      // fire-and-forget sync to the backend cart table
       api.post("/cart", { productId: product.id, quantity }).catch((err) => {
         console.error("Failed to sync add-to-cart with server:", err);
       });
@@ -95,19 +108,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clear = useCallback(() => {
     setItems([]);
-    localStorage.removeItem(STORAGE_KEY);
-    // no need to call the backend here — orders.js already clears
-    // cart_items server-side as part of placing the order
-  }, []);
+    localStorage.removeItem(storageKey);
+  }, [storageKey]);
 
   const total = useMemo(
     () => items.reduce((sum, i) => sum + i.product.price * i.quantity, 0),
     [items]
   );
-  const count = useMemo(
-    () => items.reduce((sum, i) => sum + i.quantity, 0),
-    [items]
-  );
+  const count = useMemo(() => items.reduce((sum, i) => sum + i.quantity, 0), [items]);
 
   return (
     <CartContext.Provider value={{ items, addItem, removeItem, updateQuantity, clear, total, count }}>
