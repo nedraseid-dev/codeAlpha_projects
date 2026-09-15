@@ -24,7 +24,7 @@ export default function Cart() {
           <div>
             <div>{product.name}</div>
             <div style={{ color: "#8a8a80", fontSize: "0.9rem" }}>
-              ${product.price.toFixed(2)} each
+              ${Number(product.price).toFixed(2)} each
             </div>
           </div>
           <input

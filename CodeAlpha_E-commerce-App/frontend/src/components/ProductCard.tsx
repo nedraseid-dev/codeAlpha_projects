@@ -14,7 +14,7 @@ export default function ProductCard({ product }: { product: Product }) {
         <Link to={`/products/${product.id}`}>
           <h3>{product.name}</h3>
         </Link>
-        <div className="price">${product.price.toFixed(2)}</div>
+        <div className="price">${Number(product.price).toFixed(2)}</div>
         <button
           className="btn"
           disabled={product.stock === 0}
