@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useMemo } from "react";
 import type { ReactNode } from "react";
 import type { CartItem, Product } from "../types";
+import api from "../api";
 
 interface CartContextValue {
   items: CartItem[];
@@ -51,6 +52,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
         return [...prev, { product, quantity }];
       });
+
+      // fire-and-forget sync to the backend cart table
+      api.post("/cart", { productId: product.id, quantity }).catch((err) => {
+        console.error("Failed to sync add-to-cart with server:", err);
+      });
     },
     [set]
   );
@@ -58,6 +64,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const removeItem = useCallback(
     (productId: string) => {
       set((prev) => prev.filter((i) => i.product.id !== productId));
+
+      api.delete(`/cart/${productId}`).catch((err) => {
+        console.error("Failed to sync cart removal with server:", err);
+      });
     },
     [set]
   );
@@ -69,6 +79,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
           ? prev.filter((i) => i.product.id !== productId)
           : prev.map((i) => (i.product.id === productId ? { ...i, quantity } : i))
       );
+
+      if (quantity <= 0) {
+        api.delete(`/cart/${productId}`).catch((err) => {
+          console.error("Failed to sync cart removal with server:", err);
+        });
+      } else {
+        api.put(`/cart/${productId}`, { quantity }).catch((err) => {
+          console.error("Failed to sync quantity update with server:", err);
+        });
+      }
     },
     [set]
   );
@@ -76,6 +96,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const clear = useCallback(() => {
     setItems([]);
     localStorage.removeItem(STORAGE_KEY);
+    // no need to call the backend here — orders.js already clears
+    // cart_items server-side as part of placing the order
   }, []);
 
   const total = useMemo(
