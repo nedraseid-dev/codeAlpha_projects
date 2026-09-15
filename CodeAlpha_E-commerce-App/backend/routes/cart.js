@@ -4,10 +4,9 @@ const authMiddleware = require("../middleware/auth");
 
 const router = express.Router();
 
-// All cart routes require a logged-in user
 router.use(authMiddleware);
 
-// GET /api/cart — view current user's cart, joined with product info
+// GET /api/cart
 router.get("/", async (req, res) => {
   try {
     const result = await pool.query(
@@ -24,7 +23,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/cart — add a product to cart (or increase quantity if already in it)
+// POST /api/cart — add a product (or bump its quantity if already in cart)
 router.post("/", async (req, res) => {
   const { productId, quantity = 1 } = req.body;
 
@@ -48,8 +47,8 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT /api/cart/:id — update quantity of a cart item
-router.put("/:id", async (req, res) => {
+// PUT /api/cart/:productId — set the quantity for a specific product
+router.put("/:productId", async (req, res) => {
   const { quantity } = req.body;
 
   if (!quantity || quantity < 1) {
@@ -58,8 +57,8 @@ router.put("/:id", async (req, res) => {
 
   try {
     const result = await pool.query(
-      "UPDATE cart_items SET quantity = $1 WHERE id = $2 AND user_id = $3 RETURNING *",
-      [quantity, req.params.id, req.userId]
+      "UPDATE cart_items SET quantity = $1 WHERE product_id = $2 AND user_id = $3 RETURNING *",
+      [quantity, req.params.productId, req.userId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Cart item not found" });
@@ -71,12 +70,12 @@ router.put("/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/cart/:id — remove an item from the cart
-router.delete("/:id", async (req, res) => {
+// DELETE /api/cart/:productId — remove a specific product from the cart
+router.delete("/:productId", async (req, res) => {
   try {
     const result = await pool.query(
-      "DELETE FROM cart_items WHERE id = $1 AND user_id = $2 RETURNING *",
-      [req.params.id, req.userId]
+      "DELETE FROM cart_items WHERE product_id = $1 AND user_id = $2 RETURNING *",
+      [req.params.productId, req.userId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: "Cart item not found" });
