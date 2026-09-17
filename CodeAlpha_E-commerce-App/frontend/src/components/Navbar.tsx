@@ -8,7 +8,7 @@ export default function Navbar() {
 
   return (
     <header className="navbar">
-      <Link to="/" className="brand">Souk</Link>
+      <Link to="/" className="brand">E-commerce App</Link>
       <nav>
         <Link to="/products">Shop</Link>
         <Link to="/cart">
